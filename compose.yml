@@ -1,0 +1,78 @@
+name: personal-api
+services:
+  db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: personal
+      POSTGRES_USER: personal
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env}
+    ports:
+      - "127.0.0.1:5433:5432"
+    volumes:
+      - personal_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U personal -d personal"]
+      interval: 5s
+      timeout: 5s
+      retries: 15
+    restart: unless-stopped
+  app:
+    profiles: [production]
+    build:
+      context: .
+      target: app
+    environment:
+      DATABASE_URL: postgres://personal:${POSTGRES_PASSWORD}@db:5432/personal
+      APP_ORIGIN: ${APP_ORIGIN}
+      APP_TIMEZONE: ${APP_TIMEZONE:-Europe/Lisbon}
+      COOKIE_SECURE: "true"
+      AI_API_KEY: ${AI_API_KEY:-}
+      AI_BASE_URL: ${AI_BASE_URL:-}
+      AI_MODEL: ${AI_MODEL:-}
+      AI_PROVIDER_NAME: ${AI_PROVIDER_NAME:-}
+      AI_MONTHLY_LIMIT_CENTS: ${AI_MONTHLY_LIMIT_CENTS:-500}
+      AI_CALL_RESERVATION_CENTS: ${AI_CALL_RESERVATION_CENTS:-100}
+      VAPID_PUBLIC_KEY: ${VAPID_PUBLIC_KEY:-}
+      VAPID_PRIVATE_KEY: ${VAPID_PRIVATE_KEY:-}
+      VAPID_SUBJECT: ${VAPID_SUBJECT:-mailto:you@example.com}
+    depends_on:
+      db:
+        condition: service_healthy
+    restart: unless-stopped
+  worker:
+    profiles: [production]
+    build:
+      context: .
+      target: worker
+    environment:
+      DATABASE_URL: postgres://personal:${POSTGRES_PASSWORD}@db:5432/personal
+      APP_ORIGIN: ${APP_ORIGIN}
+      AI_API_KEY: ${AI_API_KEY:-}
+      AI_BASE_URL: ${AI_BASE_URL:-}
+      AI_MODEL: ${AI_MODEL:-}
+      AI_PROVIDER_NAME: ${AI_PROVIDER_NAME:-}
+      AI_MONTHLY_LIMIT_CENTS: ${AI_MONTHLY_LIMIT_CENTS:-500}
+      AI_CALL_RESERVATION_CENTS: ${AI_CALL_RESERVATION_CENTS:-100}
+      VAPID_PUBLIC_KEY: ${VAPID_PUBLIC_KEY:-}
+      VAPID_PRIVATE_KEY: ${VAPID_PRIVATE_KEY:-}
+      VAPID_SUBJECT: ${VAPID_SUBJECT:-mailto:you@example.com}
+    depends_on:
+      db:
+        condition: service_healthy
+    restart: unless-stopped
+  https:
+    image: caddy:2-alpine
+    profiles: [production]
+    environment:
+      APP_HOST: ${APP_HOST:?Set APP_HOST}
+    ports: ["80:80", "443:443"]
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    depends_on: [app]
+    restart: unless-stopped
+volumes:
+  personal_data:
+  caddy_data:
+  caddy_config:
